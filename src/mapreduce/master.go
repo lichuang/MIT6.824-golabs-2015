@@ -1,7 +1,9 @@
 package mapreduce
 
 import "container/list"
-import "fmt"
+import (
+    "fmt"
+)
 
 
 type WorkerInfo struct {
@@ -28,7 +30,61 @@ func (mr *MapReduce) KillWorkers() *list.List {
 	return l
 }
 
+func (mr *MapReduce) sendJob(i int, operation JobType, worker string) bool {
+  var args DoJobArgs
+  args.File = mr.file
+  args.JobNumber = i
+  args.NumOtherPhase = mr.nReduce
+  args.Operation = operation
+  
+  var reply DoJobReply
+  
+  return call(worker, "Worker.DoJob", args, &reply)
+}
+
+func (mr *MapReduce) jobMain(jobChan chan int, operation JobType, i int) {
+  for {
+    var worker string
+    var ok bool = false
+    
+    select {
+    case worker = <- mr.jobDoneChannel:
+      ok = mr.sendJob(i, operation, worker)
+    case worker = <- mr.registerChannel:
+      ok = mr.sendJob(i, operation, worker)
+    }
+    
+    if (ok) {
+      jobChan <- i
+      mr.jobDoneChannel <- worker
+      return
+    }
+  }
+}
+
 func (mr *MapReduce) RunMaster() *list.List {
-	// Your code here
-	return mr.KillWorkers()
+  // Your code here
+  var mapChan, reduceChan = make(chan int, mr.nMap), make(chan int, mr.nReduce)
+  
+  // 1: do map job
+  for i := 0; i < mr.nMap; i++ {
+    go mr.jobMain(mapChan, Map, i)
+  }
+  
+  // wait map job done
+  for i := 0; i < mr.nMap; i++{
+    <- mapChan
+  }
+  
+  // 2: do reduce job
+  for i := 0; i < mr.nReduce; i++ {
+    go mr.jobMain(reduceChan, Reduce, i)
+  }
+  
+  // wait reduce job done
+  for i := 0; i < mr.nReduce; i++{
+    <- reduceChan
+  }
+  
+  return mr.KillWorkers()
 }

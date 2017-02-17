@@ -8,7 +8,7 @@ const (
 	Reduce = "Reduce"
 )
 
-type JobType string
+type  JobType string
 
 // RPC arguments and replies.  Field names must start with capital letters,
 // otherwise RPC will break.

@@ -64,6 +64,7 @@ type MapReduce struct {
 	Workers map[string]*WorkerInfo
 
 	// add any additional state here
+  jobDoneChannel chan string
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -78,6 +79,8 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.DoneChannel = make(chan bool)
 
 	// initialize any additional state here
+  mr.jobDoneChannel = make(chan string)
+  
 	return mr
 }
 
@@ -161,6 +164,7 @@ func (mr *MapReduce) Split(fileName string) {
 	m := 1
 	i := 0
 
+    //DPrintf("outfile:%s\n", outfile.Name())
 	scanner := bufio.NewScanner(infile)
 	for scanner.Scan() {
 		if int64(i) > nchunk*int64(m) {
