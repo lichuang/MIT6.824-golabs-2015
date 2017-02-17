@@ -30,11 +30,11 @@ func (mr *MapReduce) KillWorkers() *list.List {
 	return l
 }
 
-func (mr *MapReduce) sendJob(i int, operation JobType, worker string) bool {
+func (mr *MapReduce) sendJob(i int, operation JobType, worker string, numOtherPhase int) bool {
   var args DoJobArgs
   args.File = mr.file
   args.JobNumber = i
-  args.NumOtherPhase = mr.nReduce
+  args.NumOtherPhase = numOtherPhase
   args.Operation = operation
   
   var reply DoJobReply
@@ -42,16 +42,16 @@ func (mr *MapReduce) sendJob(i int, operation JobType, worker string) bool {
   return call(worker, "Worker.DoJob", args, &reply)
 }
 
-func (mr *MapReduce) jobMain(jobChan chan int, operation JobType, i int) {
+func (mr *MapReduce) jobMain(jobChan chan int, operation JobType, i int, numOtherPhase int) {
   for {
     var worker string
     var ok bool = false
     
     select {
     case worker = <- mr.jobDoneChannel:
-      ok = mr.sendJob(i, operation, worker)
+      ok = mr.sendJob(i, operation, worker, numOtherPhase)
     case worker = <- mr.registerChannel:
-      ok = mr.sendJob(i, operation, worker)
+      ok = mr.sendJob(i, operation, worker, numOtherPhase)
     }
     
     if (ok) {
@@ -68,7 +68,7 @@ func (mr *MapReduce) RunMaster() *list.List {
   
   // 1: do map job
   for i := 0; i < mr.nMap; i++ {
-    go mr.jobMain(mapChan, Map, i)
+    go mr.jobMain(mapChan, Map, i, mr.nReduce)
   }
   
   // wait map job done
@@ -78,7 +78,7 @@ func (mr *MapReduce) RunMaster() *list.List {
   
   // 2: do reduce job
   for i := 0; i < mr.nReduce; i++ {
-    go mr.jobMain(reduceChan, Reduce, i)
+    go mr.jobMain(reduceChan, Reduce, i, mr.nMap)
   }
   
   // wait reduce job done
