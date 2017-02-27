@@ -50,6 +50,7 @@ func Test1(t *testing.T) {
 	}
 
 	// very first primary
+	// 第一个用例：测试ck1称为primary，无backup
 	fmt.Printf("Test: First primary ...\n")
 
 	for i := 0; i < DeadPings*2; i++ {
@@ -63,6 +64,7 @@ func Test1(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 
 	// very first backup
+	// 第二个用例：测试ck1成为primary，ck2为backup
 	fmt.Printf("Test: First backup ...\n")
 
 	{
@@ -80,6 +82,7 @@ func Test1(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 
 	// primary dies, backup should take over
+	// 第三个用例：测试ck1不进行ping操作，viewserver认为ck1 dead，将ck2提升为primary
 	fmt.Printf("Test: Backup takes over if primary fails ...\n")
 
 	{
@@ -97,6 +100,7 @@ func Test1(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 
 	// revive ck1, should become backup
+	// 第四个用例：测试ck1恢复运行，成为backup
 	fmt.Printf("Test: Restarted server becomes backup ...\n")
 
 	{
@@ -119,6 +123,8 @@ func Test1(t *testing.T) {
 	// this should happen in a single view change, without
 	// any period in which there's no backup.
 	fmt.Printf("Test: Idle third server becomes backup if primary fails ...\n")
+	// 第五个用例：启动ck3，干掉ck2，这样原先的backup ck1成为primary，
+	// 而ck3成为backup
 
 	{
 		vx, _ := ck2.Get()
@@ -139,14 +145,18 @@ func Test1(t *testing.T) {
 	// kill and immediately restart the primary -- does viewservice
 	// conclude primary is down even though it's pinging?
 	fmt.Printf("Test: Restarted primary treated as dead ...\n")
+	// 第六个用例：模拟迅速的杀死然后重启primary，此时viewserver应该
+	// 切换primary
 
 	{
 		vx, _ := ck1.Get()
 		ck1.Ping(vx.Viewnum)
 		for i := 0; i < DeadPings*2; i++ {
+			// ck1一直以0来ping
 			ck1.Ping(0)
 			ck3.Ping(vx.Viewnum)
 			v, _ := ck3.Get()
+			// 当primary不是ck1时退出循环
 			if v.Primary != ck1.me {
 				break
 			}
@@ -160,6 +170,7 @@ func Test1(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 
 	fmt.Printf("Test: Dead backup is removed from view ...\n")
+	// 第七个用例：此时的backup ck1不发ping请求，导致被viewserver kill掉
 
 	// set up a view with just 3 as primary,
 	// to prepare for the next test.
@@ -179,6 +190,7 @@ func Test1(t *testing.T) {
 	// does viewserver wait for ack of previous view before
 	// starting the next one?
 	fmt.Printf("Test: Viewserver waits for primary to ack view ...\n")
+	// 第八个用例：检查在primary没有ack的情况下，不能修改view
 
 	{
 		// set up p=ck3 b=ck1, but
@@ -193,10 +205,15 @@ func Test1(t *testing.T) {
 			}
 			time.Sleep(PingInterval)
 		}
+
 		check(t, ck1, ck3.me, ck1.me, vx.Viewnum+1)
 		vy, _ := ck1.Get()
 		// ck3 is the primary, but it never acked.
 		// let ck3 die. check that ck1 is not promoted.
+
+		// 这个循环中，当前的primary ck3没有做任何一次ping操作
+		// 因此认为ck3 dead了，但是也正是因为没有ack，所以不能把ck1
+		// 提升为primary
 		for i := 0; i < DeadPings*3; i++ {
 			v, _ := ck1.Ping(vy.Viewnum)
 			if v.Viewnum > vy.Viewnum {
@@ -211,8 +228,11 @@ func Test1(t *testing.T) {
 	// if old servers die, check that a new (uninitialized) server
 	// cannot take over.
 	fmt.Printf("Test: Uninitialized server can't become primary ...\n")
+	// 第九个用例：检查在primary没有ack的情况下，不能修改view
 
 	{
+		// 先建立测试环境：让ck3、ck1分别成为primary和backup
+		// 而ck2只是ping 0，即从未初始化
 		for i := 0; i < DeadPings*2; i++ {
 			v, _ := ck1.Get()
 			ck1.Ping(v.Viewnum)
@@ -220,11 +240,15 @@ func Test1(t *testing.T) {
 			ck3.Ping(v.Viewnum)
 			time.Sleep(PingInterval)
 		}
+		// 下面这个循环继续只有ck2 ping 0
+		// 因此认为ck1，ck3已经超时
+		// 但是由于ck2一直是ping 0，即从未初始化，因此不能提升为primary
 		for i := 0; i < DeadPings*2; i++ {
 			ck2.Ping(0)
 			time.Sleep(PingInterval)
 		}
 		vz, _ := ck2.Get()
+		fmt.Printf("primary:%s, backup:%s\n", vz.Primary, vz.Backup)
 		if vz.Primary == ck2.me {
 			t.Fatalf("uninitialized backup promoted to primary")
 		}
