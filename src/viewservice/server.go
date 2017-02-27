@@ -69,6 +69,7 @@ func (vs *ViewServer) promoteBackup() {
 	vs.current.Primary = vs.current.Backup
 	vs.current.Backup = ""
 	vs.primaryState = vs.backupState
+	vs.backupState = serverState{0, 0}
 }
 
 //
@@ -92,6 +93,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 
 	// no backup and primary has acked
 	case !vs.isPrimary(name) && !vs.hasBackup() && vs.acked():
+		// 只有在ack的状态下才能修改view
 		vs.current.Backup = name
 		vs.current.Viewnum++
 		vs.backupState.tick = vs.currentTick
@@ -99,6 +101,8 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 	// primary ping
 	case vs.isPrimary(name):
 		if viewNum == 0 {
+			// primary以ping 0启动，表示是从crash状态重启
+			// 此时可以进行切换，将backup提升为primary
 			vs.promoteBackup()
 		} else {
 			vs.primaryState.acked = viewNum
@@ -108,6 +112,9 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 	// backup ping
 	case vs.isBackup(name):
 		if viewNum == 0 && vs.acked() {
+			// viewnum=0表示是刚启动
+			// acked返回true表示当前primary应答了当前view
+			// 这种情况下才允许修改view，成为backup
 			vs.current.Backup = name
 			vs.current.Viewnum++
 			vs.backupState.tick = vs.currentTick
