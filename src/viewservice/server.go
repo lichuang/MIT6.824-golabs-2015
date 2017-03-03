@@ -15,6 +15,9 @@ import "sync/atomic"
 // 应答规则：只有在当前的primary应答了当前的view，才能修改view。
 // 因此，假如primary没有应答当前的view，那么即使在primary过期的情况下，
 // 也不允许切换到下一个状态
+// 另一种可以修改view的方式是：当原先的primary以ping 0启动，此时系统认为此primary
+// 是从crash中恢复的，所以可以切换view将backup提升为primary
+// 之所以这样设计，是为了避免出现脑裂（split brain）问题，导致系统中同时存在两个不同的view
 
 type serverState struct {
 	acked uint
