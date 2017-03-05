@@ -1,9 +1,18 @@
 package pbservice
 
+import (
+	"viewservice"
+)
+
 const (
 	OK             = "OK"
 	ErrNoKey       = "ErrNoKey"
 	ErrWrongServer = "ErrWrongServer"
+)
+
+const (
+	Put    = "Put"
+	Append = "Append"
 )
 
 type Err string
@@ -14,6 +23,8 @@ type PutAppendArgs struct {
 	Value string
 	// You'll have to add definitions here.
 
+	Seq int64
+	Op  string
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
 }
@@ -32,5 +43,21 @@ type GetReply struct {
 	Value string
 }
 
-
 // Your RPC definitions here.
+type SyncArgs struct {
+	Data map[string]string
+	Seen map[int64]bool
+	View viewservice.View
+}
+
+type SyncReply struct {
+}
+
+type SyncUpdateArgs struct {
+	Key   string
+	Value string
+	Seq   int64
+}
+
+type SyncUpdateReply struct {
+}
