@@ -37,13 +37,27 @@ func debug(format string, a ...interface{}) {
 	}
 }
 
+func (pb *PBServer) isPrimary() bool {
+	return pb.view.Primary == pb.me
+}
+
+func (pb *PBServer) isDuplicateSeq(seq int64) bool {
+	_, ok := pb.seen[seq]
+	if ok {
+		return true
+	}
+	pb.seen[seq] = true
+
+	return false
+}
+
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 
 	// Your code here.
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	if pb.view.Primary != pb.me {
+	if !pb.isPrimary() {
 		reply.Err = ErrWrongServer
 		return nil
 	}
@@ -68,17 +82,15 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	if pb.view.Primary != pb.me {
+	if !pb.isPrimary() {
 		reply.Err = ErrWrongServer
 		return nil
 	}
 
 	reply.Err = OK
-	_, ok := pb.seen[args.Seq]
-	if ok {
+	if pb.isDuplicateSeq(args.Seq) {
 		return nil
 	}
-	pb.seen[args.Seq] = true
 	var value string
 	if args.Op == Put {
 		value = args.Value
@@ -118,14 +130,15 @@ func (pb *PBServer) SyncUpdate(args *SyncUpdateArgs, reply *SyncUpdateReply) err
 
 func (pb *PBServer) Sync(args *SyncArgs, reply *SyncReply) error {
 	pb.mu.Lock()
+	defer pb.mu.Unlock()
 	pb.data = args.Data
 	pb.seen = args.Seen
+
 	if enableDebug() {
 		for key, value := range pb.data {
 			debug("sync %s %s:%s", pb.me, key, value)
 		}
 	}
-	pb.mu.Unlock()
 	return nil
 }
 
@@ -139,6 +152,8 @@ func (pb *PBServer) tick() {
 
 	// Your code here.
 	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
 	view, err := pb.vs.Ping(pb.view.Viewnum)
 	if err != nil {
 
@@ -153,7 +168,6 @@ func (pb *PBServer) tick() {
 		}
 	}
 	pb.view = view
-	pb.mu.Unlock()
 }
 
 // tell the server to shut itself down.

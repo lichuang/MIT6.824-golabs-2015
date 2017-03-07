@@ -1062,6 +1062,8 @@ func TestPartition1(t *testing.T) {
 	vs.Kill()
 }
 
+// 这个用例和前面的类似，只不过TestPartition1使用了两个server
+// 这个用例使用了三个
 func TestPartition2(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
