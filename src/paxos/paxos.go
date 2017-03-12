@@ -208,11 +208,6 @@ func (px *Paxos) generatePNum() string {
 	begin := time.Date(2015, time.May, 6, 22, 0, 0, 0, time.UTC)
 	duration := time.Now().Sub(begin)
 	return strconv.FormatInt(duration.Nanoseconds(), 10) + "-" + strconv.Itoa(px.me)
-
-	/*
-		now := time.Now()
-		return strconv.FormatInt(int64(now.Nanosecond()), 10) + "-" + strconv.Itoa(px.me)
-	*/
 }
 
 func (px *Paxos) sendPrepare(seq int, v interface{}) (bool, string, interface{}) {
