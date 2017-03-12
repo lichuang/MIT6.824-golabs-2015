@@ -67,9 +67,10 @@ func call(srv string, rpcname string,
 //
 func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
-	args := &GetArgs{}
-	args.Key = key
-	args.Seq = nrand()
+	args := &GetArgs{
+		Key: key,
+		Seq: nrand(),
+	}
 
 	var reply GetReply
 	index := 0
@@ -91,11 +92,12 @@ func (ck *Clerk) Get(key string) string {
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// You will have to modify this function.
-	args := PutAppendArgs{}
-	args.Key = key
-	args.Seq = nrand()
-	args.Value = value
-	args.Op = op
+	args := PutAppendArgs{
+		Key:   key,
+		Seq:   nrand(),
+		Value: value,
+		Op:    op,
+	}
 
 	var reply PutAppendReply
 	index := 0
