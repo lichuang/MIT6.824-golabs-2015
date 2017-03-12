@@ -1,22 +1,39 @@
 package paxos
 
 const (
-	OK     = "OK"
-	REJECT = "REJECT"
+	OK = "OK"
+	Reject = "Reject"
 )
 
-type PaxosArgs struct {
-	PNum      string
-	PValue    interface{}
-	Me        int
-	Done      int
-	ProposeId int
+type PrepareArgs struct {
+	Seq int
+	PNum string
 }
 
-type PaxosReply struct {
-	Result string
-	Pnum   string
-	PValue interface{}
+type PrepareReply struct {
+	Err string
+	AcceptPnum string
+	AcceptValue interface {}
 }
 
-// for propose api
+type AcceptArgs struct {
+	Seq int
+	PNum string
+	Value interface {}
+}
+
+type AcceptReply struct  {
+	Err string
+}
+
+type DecideArgs struct {
+	Seq int
+	Value interface {}
+	PNum string
+	Me int
+	Done int
+}
+
+type DecideReply struct {
+
+}
