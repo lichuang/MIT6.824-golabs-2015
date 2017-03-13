@@ -48,7 +48,6 @@ type KVPaxos struct {
 	seq     map[int64]bool
 	logs    []Op
 	lastSeq int
-	servers []string
 }
 
 // helper functions
@@ -213,7 +212,6 @@ func StartServer(servers []string, me int) *KVPaxos {
 	kv.seq = make(map[int64]bool)
 	kv.logs = []Op{}
 	kv.lastSeq = 1
-	kv.servers = servers
 
 	rpcs := rpc.NewServer()
 	rpcs.Register(kv)
