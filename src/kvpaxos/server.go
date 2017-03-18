@@ -11,9 +11,7 @@ import "os"
 import "syscall"
 import "encoding/gob"
 import "math/rand"
-import (
-	"time"
-)
+import "time"
 
 const Debug = 0
 
@@ -69,7 +67,7 @@ func (kv *KVPaxos) wait(seq int) Op {
 }
 
 // apply operation log
-func (kv *KVPaxos) Apply(op Op) {
+func (kv *KVPaxos) apply(op Op) {
 	// append logs
 	if op.Op != GET {
 		// append op log
@@ -98,7 +96,7 @@ func (kv *KVPaxos) Apply(op Op) {
 }
 
 // process operation until v.ClientSeq decided
-func (kv *KVPaxos) ProcessOperation(v Op) {
+func (kv *KVPaxos) processOperation(v Op) {
 	ok := false
 	var log Op
 	for !ok {
@@ -114,7 +112,7 @@ func (kv *KVPaxos) ProcessOperation(v Op) {
 		}
 
 		ok = v.ClientSeq == log.ClientSeq
-		kv.Apply(log)
+		kv.apply(log)
 	}
 }
 
@@ -128,7 +126,7 @@ func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
 		Key:       args.Key,
 		ClientSeq: args.Seq,
 	}
-	kv.ProcessOperation(op)
+	kv.processOperation(op)
 
 	val, ok := kv.kv[op.Key]
 	if !ok {
@@ -158,7 +156,7 @@ func (kv *KVPaxos) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 		Key:       args.Key,
 		Value:     args.Value,
 	}
-	kv.ProcessOperation(appendOp)
+	kv.processOperation(appendOp)
 
 	DPrintf("%d %s %s:%s done\n", kv.me, args.Op, args.Key, args.Value)
 	//kv.px.Done(kv.lastSeq)
