@@ -1,6 +1,0 @@
-Test: Basic Join/Leave ...
---- FAIL: TestBasic (2.94s)
-	test_test.go:154: joining; wrong value; g=2 k=5577006791947779410 wanted=1874068156324778273 got=8674665223082153551
-Test: Shards really move ...
-signal: interrupt
-FAIL	shardkv	14.047s
