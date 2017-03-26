@@ -155,7 +155,7 @@ func (kv *ShardKV) checkOp(op Op) Err {
 	switch op.Type {
 	case RECONFIG:
 		if kv.config.Num >= op.Config.Num {
-			return ""
+			return OK
 		}
 	case PUT, GET:
 		shard := key2shard(op.Key)
