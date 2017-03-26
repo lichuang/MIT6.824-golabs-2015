@@ -34,9 +34,8 @@ const (
 )
 
 type MergeResult struct {
-	Data    map[string]string // k -> v
-	Replies map[string]string // k -> v
-	Seen    map[string]int64  // client -> seq
+	Data map[string]string // k -> v
+	Seen map[string]int64  // client -> seq
 }
 
 type Op struct {
@@ -65,8 +64,7 @@ type ShardKV struct {
 	// Your definitions here.
 	data      map[string]string // k -> v
 	seen      map[string]int64  // client -> seq
-	replies   map[string]string
-	processed int // paxos seq
+	processed int               // paxos seq
 	config    shardmaster.Config
 }
 
@@ -86,15 +84,10 @@ func (kv *ShardKV) wait(seq int) Op {
 
 func (kv *ShardKV) applyGet(op Op) {
 	kv.seen[op.Client] = op.Seq
-	old, _ := kv.data[op.Key]
-	kv.replies[op.Client] = old
 }
 
 func (kv *ShardKV) applyPut(op Op) {
-	old, _ := kv.data[op.Key]
 	kv.seen[op.Client] = op.Seq
-	//old, _ := kv.data[op.Key]
-	kv.replies[op.Client] = old
 	kv.data[op.Key] = op.Value
 
 	DPrintf("%d put %s:%s", kv.me, op.Key, op.Value)
@@ -111,7 +104,6 @@ func (kv *ShardKV) applyAppend(op Op) {
 	}
 
 	kv.data[op.Key] = newValue
-	kv.replies[op.Client] = old
 }
 
 func (kv *ShardKV) applyReconfig(op Op) {
@@ -159,34 +151,34 @@ func (kv *ShardKV) apply(op Op) {
 	kv.px.Done(kv.processed)
 }
 
-func (kv *ShardKV) checkOp(op Op) (Err, string) {
+func (kv *ShardKV) checkOp(op Op) Err {
 	switch op.Type {
 	case RECONFIG:
 		if kv.config.Num >= op.Config.Num {
-			return "", ""
+			return ""
 		}
 	case PUT, GET:
 		shard := key2shard(op.Key)
 		if kv.gid != kv.config.Shards[shard] {
-			return ErrWrongGroup, ""
+			return ErrWrongGroup
 		}
 
 		seq, exist := kv.seen[op.Client]
 		if exist && op.Seq <= seq {
-			return OK, kv.replies[op.Client]
+			return OK
 		}
 	}
 
-	return "", ""
+	return ""
 }
 
-func (kv *ShardKV) process(op Op) (Err, string) {
+func (kv *ShardKV) process(op Op) Err {
 	var ok = false
 	op.UUID = nrand()
 	for !ok {
-		err, reply := kv.checkOp(op)
+		err := kv.checkOp(op)
 		if err != "" {
-			return err, reply
+			return err
 		}
 
 		seq := kv.processed + 1
@@ -204,7 +196,7 @@ func (kv *ShardKV) process(op Op) (Err, string) {
 		kv.apply(res)
 	}
 
-	return OK, kv.replies[op.Client]
+	return OK
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
@@ -219,20 +211,18 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
 		Seq:    args.Seq,
 	}
 
-	reply.Err, reply.Value = kv.process(op)
+	reply.Err = kv.process(op)
 	if reply.Err != OK {
 		return nil
 	}
 
-	/*
-		value, exist := kv.data[args.Key]
-		if !exist {
-			reply.Err = ErrNoKey
-		} else {
-			reply.Err = OK
-			reply.Value = value
-		}
-	*/
+	value, exist := kv.data[args.Key]
+	if !exist {
+		reply.Err = ErrNoKey
+	} else {
+		reply.Err = OK
+		reply.Value = value
+	}
 	DPrintf("%d get %s:%s", kv.me, args.Key, reply.Value)
 
 	return nil
@@ -252,16 +242,13 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 		Seq:    args.Seq,
 	}
 
-	reply.Err, _ = kv.process(op)
+	reply.Err = kv.process(op)
 
 	DPrintf("%d %s %s:%s %s", kv.me, args.Op, args.Key, args.Value, reply.Err)
 	return nil
 }
 
 func (kv *ShardKV) GroupSync(args *GroupSyncArgs, reply *GroupSyncReply) error {
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
-
 	config := kv.config
 	shard := args.Shard
 	if config.Num < args.ConfigNum {
@@ -269,13 +256,15 @@ func (kv *ShardKV) GroupSync(args *GroupSyncArgs, reply *GroupSyncReply) error {
 		return nil
 	}
 
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+
 	op := Op{
 		Type: GROUPSYNC,
 	}
 	kv.process(op)
 
 	reply.Data = make(map[string]string)
-	reply.Replies = make(map[string]string)
 	reply.Seen = make(map[string]int64)
 	reply.Err = OK
 
@@ -289,7 +278,6 @@ func (kv *ShardKV) GroupSync(args *GroupSyncArgs, reply *GroupSyncReply) error {
 
 	for client, seq := range kv.seen {
 		reply.Seen[client] = seq
-		reply.Replies[client] = kv.replies[client]
 	}
 
 	return nil
@@ -304,7 +292,6 @@ func (kv *ShardKV) merge(reply *GroupSyncReply, merge *MergeResult) {
 		seq, exists := merge.Seen[client]
 		if !exists || seq < newSeq {
 			merge.Seen[client] = newSeq
-			merge.Replies[client] = reply.Replies[client]
 		}
 	}
 }
@@ -313,9 +300,8 @@ func (kv *ShardKV) reconfig(newConfig *shardmaster.Config) bool {
 	//DPrintf("reconfig %v", newConfig)
 
 	mergeResult := MergeResult{
-		Data:    make(map[string]string),
-		Replies: make(map[string]string),
-		Seen:    make(map[string]int64),
+		Data: make(map[string]string),
+		Seen: make(map[string]int64),
 	}
 	oldConfig := &kv.config
 	myGid := kv.gid
@@ -435,7 +421,6 @@ func StartServer(gid int64, shardmasters []string,
 	// Don't call Join().
 	kv.config = shardmaster.Config{Num: -1}
 	kv.data = make(map[string]string)
-	kv.replies = make(map[string]string)
 	kv.seen = make(map[string]int64)
 	kv.processed = 0
 
